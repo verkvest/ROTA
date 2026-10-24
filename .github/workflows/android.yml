@@ -75,6 +75,9 @@ jobs:
             echo "::notice::Android release keystore secrets are absent. Building a debug-signed APK."
           fi
 
+      - name: Install Android build template
+        run: "$HOME/godot" --headless --path . --install-android-build-template
+
       - name: Export release APK and AAB
         if: steps.sign.outputs.signed == 'true'
         run: |
