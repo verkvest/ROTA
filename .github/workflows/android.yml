@@ -75,15 +75,11 @@ jobs:
             echo "::notice::Android release keystore secrets are absent. Building a debug-signed APK."
           fi
 
-      - name: Install Android build template
-        run: |
-          "$HOME/godot" --headless --path . --install-android-build-template
-
       - name: Export release APK and AAB
         if: steps.sign.outputs.signed == 'true'
         run: |
           mkdir -p export/android
-          "$HOME/godot" --headless --path . --export-release "Android APK" export/android/kivven.apk
+          "$HOME/godot" --headless --path . --install-android-build-template --export-release "Android APK" export/android/kivven.apk
           "$HOME/godot" --headless --path . --export-release "Android AAB" export/android/kivven.aab
           ls -lh export/android
 
@@ -91,7 +87,7 @@ jobs:
         if: steps.sign.outputs.signed != 'true'
         run: |
           mkdir -p export/android
-          "$HOME/godot" --headless --path . --export-debug "Android APK" export/android/kivven-debug.apk
+          "$HOME/godot" --headless --path . --install-android-build-template --export-debug "Android APK" export/android/kivven-debug.apk
           ls -lh export/android
 
       - uses: actions/upload-artifact@v4
