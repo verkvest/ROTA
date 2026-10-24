@@ -145,6 +145,11 @@ var margin_x := 20: set = set_margin_x
 var margin_y := 20: set = set_margin_y
 
 func _ready():
+	if "--phone-shot" in OS.get_cmdline_user_args():
+		# Keep the software renderer from building a huge shadow atlas on the first frame.
+		shadow_buffer = 0
+		RenderingServer.canvas_set_shadow_texture_size(256)
+		DisplayServer.window_set_size(Vector2i(1280, 720))
 	var current = get_tree().current_scene
 	csfn = current.scene_file_path if current else ""
 	last_scene = csfn
@@ -181,7 +186,10 @@ func _ready():
 	set_radial_blur()
 	set_light_enabled()
 	set_shadow_enabled()
-	set_shadow_buffer()
+	if "--phone-shot" in OS.get_cmdline_user_args():
+		RenderingServer.canvas_set_shadow_texture_size(256)
+	else:
+		set_shadow_buffer()
 	set_is_weather()
 	set_is_interpolate()
 	set_is_touch()

@@ -6,6 +6,10 @@ on:
     types:
       - released
 
+concurrency:
+  group: godot-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   GODOT_VERSION: 4.7.2
   EXPORT_NAME: kivven-ci
@@ -70,9 +74,10 @@ jobs:
           mv export/Godot_v${GODOT_VERSION}-stable_linux.x86_64 export/godot
           chmod +x export/godot
       - name: Capture menu and gameplay
+        timeout-minutes: 8
         run: |
           mkdir -p "$RUNNER_TEMP/shots"
-          xvfb-run -s "-screen 0 1280x720x24" export/godot --path . --resolution 1280x720 -- --phone-shot --shot-dir="$RUNNER_TEMP/shots"
+          xvfb-run -a -s "-screen 0 1280x720x24" export/godot --path . --verbose --resolution 1280x720 -- --phone-shot --shot-dir="$RUNNER_TEMP/shots"
           ls -la "$RUNNER_TEMP/shots"
       - uses: actions/upload-artifact@v4
         with:
