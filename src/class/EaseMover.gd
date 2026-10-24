@@ -7,13 +7,13 @@ var last := -1.0
 var from := Vector2.ZERO
 var to := Vector2.ZERO
 var current := Vector2.ZERO
-var node
+var node: Variant = null
 
-var is_complete setget , get_is_complete
-var is_less setget , get_is_less
-var is_last setget , get_is_last
+var is_complete : get = get_is_complete
+var is_less : get = get_is_less
+var is_last : get = get_is_last
 
-func _init(_time := time, _clock := clock, _from := from, _to := to, _node := node):
+func _init(_time: float = time, _clock: float = clock, _from: Vector2 = from, _to: Vector2 = to, _node: Variant = node):
 	time = _time
 	clock = _time if _clock < 0.0 else _clock
 	
@@ -27,15 +27,15 @@ func count(delta, arg := show, is_smooth := true):
 	return smooth() if is_smooth else (clock / time)
 
 func move(delta, arg := show, is_smooth := true):
-	current = from.linear_interpolate(to, count(delta, arg, is_smooth))
+	current = from.lerp(to, count(delta, arg, is_smooth))
 	
 	if is_instance_valid(node):
-		node.rect_position = current
+		node.position = current
 	
 	return current
 
 func from_lerp_to(arg := (clock / time)):
-	return from.linear_interpolate(to, arg)
+	return from.lerp(to, arg)
 
 func frac():
 	return clock / time

@@ -29,7 +29,7 @@ func clear_history():
 
 func add(arg):
 	history.append(arg)
-	history.remove(0)
+	history.remove_at(0)
 	#print(history)
 	
 	for i in codes.keys():

@@ -1,0 +1,98 @@
+name: android
+
+on:
+  workflow_dispatch:
+  pull_request:
+
+env:
+  GODOT_VERSION: 4.7.2
+  BUNDLE_ID: es.verkvest.kivven
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: JDK, Android SDK 36, Godot
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y openjdk-17-jdk wget unzip
+          export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+          echo "JAVA_HOME=$JAVA_HOME" >> "$GITHUB_ENV"
+          SDK="$HOME/android-sdk"
+          mkdir -p "$SDK/cmdline-tools"
+          wget -q https://dl.google.com/android/repository/commandlinetools-linux-13114758_latest.zip -O /tmp/cmdtools.zip
+          unzip -q /tmp/cmdtools.zip -d "$SDK/cmdline-tools"
+          mv "$SDK/cmdline-tools/cmdline-tools" "$SDK/cmdline-tools/latest"
+          yes | "$SDK/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$SDK" --licenses >/dev/null || true
+          "$SDK/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$SDK" "platforms;android-36" "build-tools;36.0.0" "platform-tools"
+          echo "ANDROID_SDK_ROOT=$SDK" >> "$GITHUB_ENV"
+          mkdir -p "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable" "$HOME/.config/godot"
+          wget -q "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip" -O /tmp/godot.zip
+          unzip -q /tmp/godot.zip -d /tmp/godot-bin
+          mv /tmp/godot-bin/Godot_v${GODOT_VERSION}-stable_linux.x86_64 "$HOME/godot"
+          chmod +x "$HOME/godot"
+          wget -q "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_export_templates.tpz" -O /tmp/templates.tpz
+          unzip -q /tmp/templates.tpz -d /tmp/godot-templates
+          cp -a /tmp/godot-templates/templates/. "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable/"
+          for f in editor_settings-4.tres editor_settings-4.7.tres; do
+            cat > "$HOME/.config/godot/$f" <<EOF
+          [gd_resource type="EditorSettings" format=3]
+
+          [resource]
+          export/android/android_sdk_path = "$SDK"
+          export/android/java_sdk_path = "$JAVA_HOME"
+          EOF
+          done
+
+      - name: Stamp build number
+        run: |
+          sed -i "s/^version\\/code=.*/version\\/code=${{ github.run_number }}/" export_presets.cfg
+
+      - name: Release keystore
+        id: sign
+        env:
+          ANDROID_KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          if [ -n "$ANDROID_KEYSTORE_B64" ] && [ -n "$ANDROID_KEYSTORE_PASSWORD" ] && [ -n "$ANDROID_KEY_ALIAS" ]; then
+            printf '%s' "$ANDROID_KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/release.keystore"
+            python3 - <<PY
+          from pathlib import Path
+          p = Path("export_presets.cfg")
+          t = p.read_text()
+          t = t.replace('keystore/release=""', 'keystore/release="$RUNNER_TEMP/release.keystore"')
+          t = t.replace('keystore/release_user=""', 'keystore/release_user="${ANDROID_KEY_ALIAS}"')
+          t = t.replace('keystore/release_password=""', 'keystore/release_password="${ANDROID_KEYSTORE_PASSWORD}"')
+          p.write_text(t)
+          PY
+            echo "signed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Android release keystore secrets are absent. Building a debug-signed APK."
+          fi
+
+      - name: Export release APK and AAB
+        if: steps.sign.outputs.signed == 'true'
+        run: |
+          mkdir -p export/android
+          "$HOME/godot" --headless --path . --export-release "Android APK" export/android/kivven.apk
+          "$HOME/godot" --headless --path . --export-release "Android AAB" export/android/kivven.aab
+          ls -lh export/android
+
+      - name: Export debug APK
+        if: steps.sign.outputs.signed != 'true'
+        run: |
+          mkdir -p export/android
+          "$HOME/godot" --headless --path . --export-debug "Android APK" export/android/kivven-debug.apk
+          ls -lh export/android
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: android
+          path: export/android/*
+          if-no-files-found: error

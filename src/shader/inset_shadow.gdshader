@@ -1,7 +1,7 @@
 shader_type canvas_item;
 
-uniform vec4 fill_color : hint_color = vec4(0.0, 0.0, 0.0, 1.0);
-uniform vec4 shadow_color : hint_color = vec4(0.2, 0.2, 0.2, 1.0);
+uniform vec4 fill_color : source_color = vec4(0.0, 0.0, 0.0, 1.0);
+uniform vec4 shadow_color : source_color = vec4(0.2, 0.2, 0.2, 1.0);
 
 uniform float shadow_dist : hint_range(0.0, 0.3) = 0.1;
 uniform float shadow_angle : hint_range(-1.0, 1.0) = 0.0;
@@ -9,8 +9,6 @@ uniform float shadow_offset : hint_range(0.0, 1.0) = 0.25;
 uniform vec2 uv_scale = vec2(1.0, 3.25);
 
 uniform float samples = 1.0;
-
-const float TAU = 6.28318530717959;
 
 void fragment(){
 	vec4 c = texture(TEXTURE, UV) * fill_color;

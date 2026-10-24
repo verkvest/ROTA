@@ -1,15 +1,15 @@
 extends Node
 
-onready var expression := Expression.new()
-export (String, MULTILINE) var expression_string := "false"
+@onready var expression := Expression.new()
+@export var expression_string := "false" # (String, MULTILINE)
 
-export (String) var erase := ""
-export (int, "Off", "On", "Swap", "Push Front", "Push Back") var is_lines := 0
-export (Array, String, MULTILINE) var lines := ["Lovely weather!"]
-export var is_greeting := false
-export var greeting := -1
-export var is_queue := false
-export (String, MULTILINE) var queue_write := ""
+@export var erase := ""
+@export var is_lines := 0 # (int, "Off", "On", "Swap", "Push Front", "Push Back")
+@export var lines := ["Lovely weather!"] # (Array, String, MULTILINE)
+@export var is_greeting := false
+@export var greeting := -1
+@export var is_queue := false
+@export var queue_write := "" # (String, MULTILINE)
 
 func _ready():
 	var error = expression.parse(expression_string, [])
@@ -22,9 +22,9 @@ func _ready():
 		if erase != "":
 			var e = erase.split_floats(",", false)
 			e.sort()
-			e.invert()
+			e.reverse()
 			for i in e:
-				p.lines.remove(int(i))
+				p.lines.remove_at(int(i))
 		
 		if is_lines > 0:
 			if is_lines == 1:
