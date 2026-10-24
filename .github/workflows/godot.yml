@@ -6,9 +6,13 @@ on:
     types:
       - released
 
+concurrency:
+  group: godot-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
-  GODOT_VERSION: 3.6.2
-  EXPORT_NAME: rota-ci
+  GODOT_VERSION: 4.7.2
+  EXPORT_NAME: kivven-ci
 
 jobs:
   export:
@@ -16,7 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v7.0.0
+        uses: actions/checkout@v4
 
       - name: Cache Godot Engine downloads
         id: cache-godot
@@ -24,38 +28,64 @@ jobs:
         with:
           path: |
             export/godot
-            export/editor_data/export_templates/${{ env.GODOT_VERSION }}.stable
-          key: godot-${{ env.GODOT_VERSION }}
+            export/export-templates
+          key: godot-${{ env.GODOT_VERSION }}-linux
 
       - name: Download Godot Engine from GitHub release
-        id: download
         if: steps.cache-godot.outputs.cache-hit != 'true'
         run: |
           mkdir -p export && cd export
+          wget -q "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          unzip -q "Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          mv "Godot_v${GODOT_VERSION}-stable_linux.x86_64" godot
+          chmod +x godot
+          wget -q "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_export_templates.tpz"
+          unzip -q "Godot_v${GODOT_VERSION}-stable_export_templates.tpz"
+          mv templates export-templates
 
-          # Download Godot Engine itself
-          wget https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_linux_headless.64.zip && \
-          unzip Godot_v${GODOT_VERSION}-stable_linux_headless.64.zip && \
-          mv Godot_v${GODOT_VERSION}-stable_linux_headless.64 godot
-
-          # Download export templates
-          mkdir -p editor_data/export_templates
-          wget https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_export_templates.tpz && \
-          unzip Godot_v${GODOT_VERSION}-stable_export_templates.tpz && \
-          mv templates editor_data/export_templates/${GODOT_VERSION}.stable
+      - name: Install export templates
+        run: |
+          DEST="$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable"
+          mkdir -p "$DEST"
+          cp -a export/export-templates/. "$DEST/"
 
       - name: Export PCK file
         run: |
-          # Tell Godot Engine to be self-contained
-          touch export/._sc_
-
-          export/godot --no-window --path=. --export-pack "Linux/X11" export/${EXPORT_NAME}.pck
+          export/godot --headless --path=. --export-pack "Linux" "export/${EXPORT_NAME}.pck"
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v7.0.1
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ env.EXPORT_NAME }}
           path: export/${{ env.EXPORT_NAME }}.pck
+
+  screenshots:
+    name: Phone screenshots
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Packages
+        run: sudo apt-get update && sudo apt-get install -y xvfb libgl1 libxcursor1 libxi6 libxrandr2 libxinerama1
+      - name: Godot
+        run: |
+          mkdir -p export
+          wget -q "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip" -O /tmp/godot.zip
+          unzip -q /tmp/godot.zip -d export
+          mv export/Godot_v${GODOT_VERSION}-stable_linux.x86_64 export/godot
+          chmod +x export/godot
+      - name: Capture menu and gameplay
+        timeout-minutes: 15
+        run: |
+          mkdir -p "$RUNNER_TEMP/shots"
+          # First editor pass writes the global class cache. Without it, class_name
+          # scripts fail to parse and the capture never quits.
+          export/godot --headless --path . --import
+          xvfb-run -a -s "-screen 0 1280x720x24" export/godot --path . --resolution 1280x720 -- --phone-shot --shot-dir="$RUNNER_TEMP/shots"
+          ls -la "$RUNNER_TEMP/shots"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: phone-screenshots
+          path: ${{ runner.temp }}/shots/*.png
 
   release:
     name: Release
@@ -64,7 +94,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Download artifact
-        uses: actions/download-artifact@v8.0.1
+        uses: actions/download-artifact@v4
         with:
           name: ${{ env.EXPORT_NAME }}
 

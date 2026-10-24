@@ -1,5 +1,7 @@
 shader_type canvas_item;
 
+uniform sampler2D SCREEN_TEXTURE : hint_screen_texture, filter_linear;
+
 uniform float height : hint_range(0.0, 5.0) = 3.0;
 uniform float fade_height : hint_range(0.0, 5.0) = 3.0;
 uniform float scale_x : hint_range(0.0, 1.0) = 1.0;

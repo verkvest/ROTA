@@ -4,6 +4,7 @@
 # custom
 .flatpak-builder/
 .import/
+.godot/
 [Aa]ndroid/
 [Ee]xport/*/
 [Ee]xport/_mac*

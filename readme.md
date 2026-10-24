@@ -1,32 +1,15 @@
-# ![icon](media/image/icon/icon48.png) ROTA: Bend Gravity
-Made with [Godot Engine](https://github.com/godotengine/godot) 3.6.1 / Gravity Bending Puzzle Platformer 
+# Kivven
 
-Available for Linux, Windows, Mac, Web & Android !
+A gravity-bending puzzle, playable on iPhone and Android. This is a phone port of the game originally released as ROTA by Harmony Honey Monroe.
 
-Play on Steam [store.steampowered.com/app/1993830/ROTA/](https://store.steampowered.com/app/1993830/ROTA/)
+Made with [Godot Engine](https://github.com/godotengine/godot) 4.7.
 
-Play on itch.io [harmonymonroe.itch.io/rota](https://harmonymonroe.itch.io/rota) (:
+Turn the world as you walk over the edge. Push and pull blocks, collect gems, and watch out for spikes.
 
-![main_capsule](media/image/assets/main_capsule.png)
+The original MIT notice is in [LICENSE](LICENSE). Other notices (Godot, Mochiy Pop One, Mixkit rain) are in [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md) and in the in-game Licenses screen.
 
-## License
-The [Unlicense](https://unlicense.org/). See [LICENSE](LICENSE) for more information.
+Bundle id: `es.verkvest.kivven`
 
-This license does not include the addons/ folder.
+## Credits
 
-## Steam
-Using [Godot-Steam-API](https://github.com/samsface/godot-steam-api) by [samsface](https://github.com/samsface/)! (:
-
-## Screenshots
-![shot1](media/image/assets/screens/thumb/1.png)
-![shot2](media/image/assets/screens/thumb/2.png)
-![shot3](media/image/assets/screens/thumb/3.png)
-![shot4](media/image/assets/screens/thumb/4.png)
-![shot5](media/image/assets/screens/thumb/5.png)
-![shot6](media/image/assets/screens/thumb/6.png)
-![shot7](media/image/assets/screens/thumb/7.png)
-![shot8](media/image/assets/screens/thumb/8.png)
-![shot9](media/image/assets/screens/thumb/9.png)
-![shot10](media/image/assets/screens/thumb/10.png)
-![shot11](media/image/assets/screens/thumb/11.png)
-
+Original game by Harmony Honey Monroe, with the people listed in the Credits screen. Rain ambience: Mixkit, “Light rain looping” (1249).

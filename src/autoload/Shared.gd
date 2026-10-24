@@ -1,9 +1,9 @@
 extends Node
 
-export var is_debug := false
-export var time_scale := 1.0 setget set_time_scale
-export var iterations := 60 setget set_iterations
-export var target_fps := 0.0 setget set_target_fps
+@export var is_debug := false
+@export var time_scale := 1.0: set = set_time_scale
+@export var iterations := 60: set = set_iterations
+@export var target_fps := 0.0: set = set_target_fps
 
 var splash_path := "res://src/menu/Splash.tscn"
 var title_path := "res://src/menu/MenuTitle.tscn"
@@ -11,14 +11,18 @@ var worlds_path := "res://src/map/worlds/"
 var start_path := "res://src/map/worlds/0/1_start.tscn"
 var end_path := "res://src/map/worlds/0/2_end.tscn"
 
-onready var csfn := get_tree().current_scene.filename
-onready var last_scene := csfn
-onready var next_scene := csfn
+var csfn := ""
+var last_scene := ""
+var next_scene := ""
 var map_name := ""
 var is_change := false
 var is_reload := false
 signal scene_before
 signal scene_changed
+
+var phone_shot := false
+var phone_dir := ""
+var phone_step := 0
 
 var gem_count := 0
 var goals := {}
@@ -27,9 +31,9 @@ var maps_visited := []
 
 enum SPEED {OFF, MAP, FILE, BOTH, TRADE}
 var clock_show := 0
-var clock_alpha := 1.0 setget set_clock_alpha
+var clock_alpha := 1.0: set = set_clock_alpha
 var clock_decimals := 2
-var clock_best_color := [Color.white, Color("ffff00")]
+var clock_best_color := [Color.WHITE, Color("ffff00")]
 
 var speedruns := {
 	"1/2": 11,
@@ -94,7 +98,7 @@ var speedruns := {
 var boxes := []
 var doors := []
 
-onready var guide := $GuideLayer/Guide
+@onready var guide := $GuideLayer/Guide
 var player
 var door_in
 var goal
@@ -118,30 +122,39 @@ var win_size := Vector2(1280, 720)
 var win_sizes := [Vector2(640, 360), Vector2(960, 540), Vector2(1280, 720), Vector2(1680, 720),
 Vector2(1600, 900), Vector2(2100, 900), Vector2(1920, 1080), Vector2(2560, 1080), Vector2(2560, 1440), Vector2(3440, 1440),
 Vector2(3840, 2160), Vector2(5160, 2160)]
-var radial_blur = 0 setget set_radial_blur
-var light_enabled := 1 setget set_light_enabled
-var shadow_enabled := 1 setget set_shadow_enabled
-var shadow_buffer := 2 setget set_shadow_buffer
-var is_weather := true setget set_is_weather
-var is_interpolate := true setget set_is_interpolate
-var is_touch := false setget set_is_touch
+var radial_blur := 0: set = set_radial_blur
+var light_enabled := 1: set = set_light_enabled
+var shadow_enabled := 1: set = set_shadow_enabled
+var shadow_buffer := 2: set = set_shadow_buffer
+var is_weather := true: set = set_is_weather
+var is_interpolate := true: set = set_is_interpolate
+var is_touch := false: set = set_is_touch
 
 var is_demo := false
 
 var boundary_rect := Rect2()
 var boundary_center := Vector2.ZERO
-onready var boundary_node := $Boundary
+@onready var boundary_node := $Boundary
 
-onready var arrow := $ArrowLayer/Arrow
-onready var arrow_mat : ShaderMaterial = $ArrowLayer/Arrow/Rect.material
+@onready var arrow := $ArrowLayer/Arrow
+@onready var arrow_mat : ShaderMaterial = $ArrowLayer/Arrow/Rect.material
 var arrow_track = null
-onready var chat := $ArrowLayer/Chat
+@onready var chat := $ArrowLayer/Chat
 
-var margin_x = 20 setget set_margin_x
-var margin_y = 20 setget set_margin_y
+var margin_x := 20: set = set_margin_x
+var margin_y := 20: set = set_margin_y
 
 func _ready():
-	Wipe.connect("complete", self, "wipe_complete")
+	if "--phone-shot" in OS.get_cmdline_user_args():
+		# Keep the software renderer from building a huge shadow atlas on the first frame.
+		shadow_buffer = 0
+		RenderingServer.canvas_set_shadow_texture_size(256)
+		DisplayServer.window_set_size(Vector2i(1280, 720))
+	var current = get_tree().current_scene
+	csfn = current.scene_file_path if current else ""
+	last_scene = csfn
+	next_scene = csfn
+	Wipe.connect("complete", Callable(self, "wipe_complete"))
 	boundary_node.visible = false
 	
 	for i in [1, 2, 3]:
@@ -149,40 +162,41 @@ func _ready():
 	
 	# get default key binds
 	for i in InputMap.get_actions():
-		default_keys[i] = InputMap.get_action_list(i)
+		default_keys[i] = InputMap.action_get_events(i)
 	
 	load_options()
 	load_data()
 	load_keys()
 	
 	# setup window
-	if OS.window_fullscreen:
+	if ((get_window().mode == Window.MODE_EXCLUSIVE_FULLSCREEN) or (get_window().mode == Window.MODE_FULLSCREEN)):
 		Input.set_mouse_mode(Input.MOUSE_MODE_HIDDEN)
 	else:
-		if OS.window_size in win_sizes:
-			win_size = OS.window_size
+		var wsz := Vector2(get_window().size)
+		if wsz in win_sizes:
+			win_size = wsz
 		
 		# center window
 		set_window_size()
 	
 	# demo check
-	var f = File.new()
-	var fe = f.file_exists("res://src/map/worlds/2A/0_hub.tscn")
-	f.close()
-	is_demo = !fe
+	is_demo = not FileAccess.file_exists("res://src/map/worlds/2A/0_hub.tscn")
 	
-	yield(get_tree(), "idle_frame")
+	await get_tree().process_frame
 	set_radial_blur()
 	set_light_enabled()
 	set_shadow_enabled()
-	set_shadow_buffer()
+	if "--phone-shot" in OS.get_cmdline_user_args():
+		RenderingServer.canvas_set_shadow_texture_size(256)
+	else:
+		set_shadow_buffer()
 	set_is_weather()
 	set_is_interpolate()
 	set_is_touch()
 
 func _input(event):
 	if event is InputEventKey and event.pressed and !event.is_echo():
-		if event.scancode == KEY_F11:
+		if event.keycode == KEY_F11:
 			toggle_fullscreen()
 	
 	# gamepad signal
@@ -237,7 +251,7 @@ func _process(delta):
 	# arrows
 	if is_instance_valid(arrow_track):
 		arrow.modulate.a = arrow_track.arrow_easy.smooth()
-		arrow_mat.set_shader_param("fill_y", arrow_track.open_easy.smooth())
+		arrow_mat.set_shader_parameter("fill_y", arrow_track.open_easy.smooth())
 
 func time_string(t := 0.0, dec = 2, is_min := false, is_hour := false):
 	# time
@@ -248,11 +262,7 @@ func time_string(t := 0.0, dec = 2, is_min := false, is_hour := false):
 	return s_hour + s_min + s_sec
 
 func wipe_scene(arg, last := csfn, delay := 0.0):
-	var f = File.new()
-	var fe = f.file_exists(arg)
-	f.close()
-	
-	if !is_change and fe:
+	if !is_change and FileAccess.file_exists(str(arg)):
 		is_change = true
 		
 		if arg != csfn:
@@ -266,13 +276,13 @@ func wipe_scene(arg, last := csfn, delay := 0.0):
 
 func wipe_complete(arg):
 	if is_change:
-		change_scene()
+		change_scene_to_file()
 		Wipe.start(true)
 
 func reset():
 	wipe_scene(csfn)
 
-func change_scene():
+func change_scene_to_file():
 	is_change = false
 	boxes.clear()
 	arrow.modulate.a = 0.0
@@ -287,7 +297,7 @@ func change_scene():
 		map_name = csfn.right(worlds_path.length()).replace(".tscn", "") if csfn.begins_with(worlds_path) else ""
 		is_arcade = "arcade" in csfn
 		is_title = csfn == title_path
-		get_tree().change_scene(next_scene)
+		get_tree().change_scene_to_file(next_scene)
 		Cam.reset_zoom()
 	
 	#print("map_name: ", map_name, " csfn: ", csfn)
@@ -298,7 +308,7 @@ func change_scene():
 	try_achievement()
 	map_clock = 0.0
 	
-	yield(get_tree(), "idle_frame")
+	await get_tree().process_frame
 	
 	for y in 3:
 		for i in doors:
@@ -313,23 +323,50 @@ func change_scene():
 	set_boundary()
 	TouchScreen.set_game(map_name != "" or is_arcade)
 	emit_signal("scene_changed")
+	if phone_shot:
+		_phone_shot_arrived()
+
+func begin_phone_shots(dir: String) -> void:
+	phone_shot = true
+	phone_dir = dir
+	phone_step = 0
+	if not DirAccess.dir_exists_absolute(dir):
+		DirAccess.make_dir_recursive_absolute(dir)
+	wipe_scene(title_path)
+
+func _phone_shot_arrived() -> void:
+	var step := phone_step
+	phone_step += 1
+	var wait := 1.4 if step == 0 else 1.8
+	await get_tree().create_timer(wait).timeout
+	await RenderingServer.frame_post_draw
+	var file_name := "menu.png" if step == 0 else "gameplay.png"
+	var image := get_viewport().get_texture().get_image()
+	var path := phone_dir.path_join(file_name)
+	image.save_png(path)
+	print("PHONE_SHOT ", path)
+	if step == 0:
+		wipe_scene("res://src/map/worlds/1/0_hub.tscn")
+	else:
+		phone_shot = false
+		get_tree().quit()
 
 func set_boundary():
 	var start = Vector2.ONE * 900
 	var end = Vector2.ONE * -900
 
 	for i in get_tree().get_nodes_in_group("solid_map"):
-		for c in i.get_used_cells():
+		for c in i.get_used_cells(0):
 			start.x = min(start.x, c.x)
 			start.y = min(start.y, c.y)
 			end.x = max(end.x, c.x)
 			end.y = max(end.y, c.y)
 	
-	boundary_center = (start.linear_interpolate(end, 0.5) + (Vector2.ONE * 0.5)) * 100.0
+	boundary_center = (start.lerp(end, 0.5) + (Vector2.ONE * 0.5)) * 100.0
 	boundary_rect.size = ((end - start) + Vector2.ONE) * 100.0
 	boundary_rect.position = boundary_center - (boundary_rect.size / 2.0)
-	boundary_node.rect_size = boundary_rect.size
-	boundary_node.rect_position = boundary_rect.position
+	boundary_node.size = boundary_rect.size
+	boundary_node.position = boundary_rect.position
 	
 	#print(map_name, " start: ", start, " end: ", end, " boundary_center: ", boundary_center, " boundary_rect.size: ", boundary_rect.size, " get_area: ", boundary_rect.get_area())
 
@@ -337,32 +374,33 @@ func is_outside_boundary(pos, margin := 10.0):
 	return boundary_rect != Rect2() and !boundary_rect.grow(margin * 100).has_point(pos)
 
 func toggle_fullscreen():
-	OS.window_fullscreen = !OS.window_fullscreen
-	Input.set_mouse_mode(Input.MOUSE_MODE_HIDDEN if OS.window_fullscreen else Input.MOUSE_MODE_VISIBLE)
-	if !OS.window_fullscreen:
+	get_window().mode = Window.MODE_EXCLUSIVE_FULLSCREEN if (!((get_window().mode == Window.MODE_EXCLUSIVE_FULLSCREEN) or (get_window().mode == Window.MODE_FULLSCREEN))) else Window.MODE_WINDOWED
+	Input.set_mouse_mode(Input.MOUSE_MODE_HIDDEN if ((get_window().mode == Window.MODE_EXCLUSIVE_FULLSCREEN) or (get_window().mode == Window.MODE_FULLSCREEN)) else Input.MOUSE_MODE_VISIBLE)
+	if !((get_window().mode == Window.MODE_EXCLUSIVE_FULLSCREEN) or (get_window().mode == Window.MODE_FULLSCREEN)):
 		set_window_size()
 
 func set_window_size(arg : Vector2 = win_size):
 	win_size = arg
 	# specific fix for borderless fullscreen
-	var b = OS.window_borderless and win_size == OS.get_screen_size()
-	OS.window_size = win_size + Vector2(2 if b else 0, 0)
-	OS.window_position = Vector2(-1, 0) if b else (OS.get_screen_size() * 0.5) - (OS.window_size * 0.5)
+	var screen := Vector2(DisplayServer.screen_get_size())
+	var b = get_window().borderless and win_size == screen
+	get_window().size = Vector2i(win_size + Vector2(2 if b else 0, 0))
+	var wsz := Vector2(get_window().size)
+	get_window().position = Vector2i(-1, 0) if b else Vector2i(screen * 0.5 - wsz * 0.5)
 
 func burst_screenshot(count := 30, viewport := get_tree().root):
-	var dir := Directory.new()
-	if !dir.dir_exists("user://snap"):
-		dir.make_dir("user://snap")
+	if not DirAccess.dir_exists_absolute("user://snap"):
+		DirAccess.make_dir_absolute("user://snap")
 	
 	var images = []
 	
 	for i in count:
-		var image = viewport.get_texture().get_data()
+		var image = viewport.get_texture().get_image()
 		image.flip_y()
 		images.append(image)
-		yield(get_tree(), "idle_frame")
+		await get_tree().process_frame
 	
-	var d = OS.get_datetime()
+	var d = Time.get_datetime_dict_from_system()
 	d.erase("dst")
 	var s = ""
 	
@@ -371,7 +409,7 @@ func burst_screenshot(count := 30, viewport := get_tree().root):
 	
 	for i in images.size():
 		images[i].save_png("user://snap/" + s + "snap" + str(i) + ".png")
-		yield(get_tree(), "idle_frame")
+		await get_tree().process_frame
 
 ### Useful funcs
 
@@ -442,7 +480,7 @@ func speedrun_goal(scene_path := csfn, _show := true):
 
 func set_volume(bus = 0, vol = 0):
 	volume[bus] = clamp(vol, 0, 100)
-	AudioServer.set_bus_volume_db(bus, linear2db(volume[bus] / 100.0))
+	AudioServer.set_bus_volume_db(bus, linear_to_db(volume[bus] / 100.0))
 	#print("volume[", bus, "] ",AudioServer.get_bus_name(bus) ," : ", volume[bus])
 
 func set_radial_blur(arg := radial_blur):
@@ -463,7 +501,8 @@ func set_shadow_enabled(arg := shadow_enabled):
 func set_shadow_buffer(arg := shadow_buffer):
 	shadow_buffer = arg
 	if is_instance_valid(Clouds.star_light):
-		Clouds.star_light.shadow_buffer_size = [1024, 2048, 4096, 8192, 16384][shadow_buffer % 5]
+		var sizes: Array[int] = [1024, 2048, 4096, 8192, 16384]
+		RenderingServer.canvas_set_shadow_texture_size(sizes[shadow_buffer % 5])
 
 func set_is_weather(arg := is_weather):
 	is_weather = bool(arg)
@@ -487,12 +526,12 @@ func set_time_scale(arg := time_scale):
 
 func set_iterations(arg := iterations):
 	iterations = max(1, arg)
-	Engine.iterations_per_second = iterations
+	Engine.physics_ticks_per_second = iterations
 
 func set_target_fps(arg := target_fps):
 	target_fps = abs(arg)
 	#print("target_fps: ", target_fps)
-	Engine.target_fps = target_fps
+	Engine.max_fps = int(target_fps)
 
 func set_margin_x(arg := margin_x):
 	margin_x = abs(arg)
@@ -510,33 +549,32 @@ func quit():
 	get_tree().quit()
 
 func _notification(what):
-	if what == MainLoop.NOTIFICATION_WM_QUIT_REQUEST:
+	if what == NOTIFICATION_WM_CLOSE_REQUEST:
 		quit()
 
 ### Files and Directory Funcs ###
 
 func list_folder(path, include_extension := true):
-	var dir = Directory.new()
-	if dir.open(path) != OK:
+	var dir := DirAccess.open(path)
+	if dir == null:
 		print("list_folder(): '", path, "' not found")
 		return
 	
 	var list = []
-	dir.list_dir_begin(true)
+	dir.list_dir_begin()
 	
 	var fname = dir.get_next()
 	while fname != "":
 		list.append(fname if include_extension else fname.split(".")[0])
 		fname = dir.get_next()
 	
-	dir.list_dir_end()
 	return list
 
 func list_all_files(path, is_ext := true):
 	var folders = [path]
 	var files = []
 	
-	while !folders.empty():
+	while !folders.is_empty():
 		var s = folders.pop_back()
 		
 		var ex = list_folders_and_files(s, is_ext)
@@ -546,12 +584,12 @@ func list_all_files(path, is_ext := true):
 	return files
 
 func list_folders_and_files(path, is_ext := true):
-	var dir = Directory.new()
-	if dir.open(path) != OK:
+	var dir := DirAccess.open(path)
+	if dir == null:
 		print("list_folders_and_files(): '", path, "' not found")
 		return
 	
-	dir.list_dir_begin(true)
+	dir.list_dir_begin()
 	var fname = dir.get_next()
 	var files := []
 	var folders := []
@@ -561,38 +599,35 @@ func list_folders_and_files(path, is_ext := true):
 		folders.append(s) if dir.current_is_dir() else files.append(s)
 		fname = dir.get_next()
 	
-	dir.list_dir_end()
 	return [folders, files]
 
 func file_save(path : String, content : String):
-	var file = File.new()
-	file.open(path, File.WRITE)
-	file.store_string(content)
-	file.close()
+	var file := FileAccess.open(path, FileAccess.WRITE)
+	if file:
+		file.store_string(content)
 
 func file_save_json(path : String, dict : Dictionary):
-	var j = JSON.print(dict, "\t")
+	var j = JSON.stringify(dict, "\t")
 	file_save(path, j)
 
 func file_load(path : String) -> String:
-	var content = ""
-	
-	var file = File.new()
-	if file.file_exists(path):
-		file.open(path, File.READ)
-		content = file.get_as_text()
-	file.close()
-	
-	return content
+	if not FileAccess.file_exists(path):
+		return ""
+	var file := FileAccess.open(path, FileAccess.READ)
+	if file == null:
+		return ""
+	return file.get_as_text()
 
 func file_load_json_dict(path : String):
 	var d := {}
 	
 	var j = file_load(path)
 	if j != "":
-		var p = JSON.parse(j)
-		if typeof(p.result) == TYPE_DICTIONARY:
-			d = p.result
+		var test_json_conv = JSON.new()
+		if test_json_conv.parse(j) == OK:
+			var p = test_json_conv.data
+			if typeof(p) == TYPE_DICTIONARY:
+				d = p
 	
 	return d
 
@@ -715,9 +750,9 @@ func save_options():
 	if win_size != Vector2(1280, 720):
 		s += "size/test_width=" + str(win_size.x) + "\n"
 		s += "size/test_height=" + str(win_size.y) + "\n"
-	s += "size/borderless=" + str(OS.window_borderless).to_lower() + "\n"
-	s += "size/fullscreen=" + str(OS.window_fullscreen).to_lower() + "\n"
-	s += "vsync/use_vsync=" + str(OS.vsync_enabled).to_lower() + "\n"
+	s += "size/borderless=" + str(get_window().borderless).to_lower() + "\n"
+	s += "size/fullscreen=" + str(((get_window().mode == Window.MODE_EXCLUSIVE_FULLSCREEN) or (get_window().mode == Window.MODE_FULLSCREEN))).to_lower() + "\n"
+	s += "vsync/use_vsync=" + str((DisplayServer.window_get_vsync_mode() != DisplayServer.VSYNC_DISABLED)).to_lower() + "\n"
 	
 	file_save("user://override.cfg", s)
 
@@ -759,9 +794,9 @@ func load_options():
 func save_keys(path := "user://keys.tres"):
 	var s_keys = SaveDict.new()
 	for a in InputMap.get_actions():
-		s_keys.dict[a] = InputMap.get_action_list(a)
+		s_keys.dict[a] = InputMap.action_get_events(a)
 	
-	ResourceSaver.save(path, s_keys)
+	ResourceSaver.save(s_keys, path)
 
 func load_keys(path := "user://keys.tres"):
 	if !ResourceLoader.exists(path): return
@@ -775,7 +810,7 @@ func load_keys(path := "user://keys.tres"):
 				for e in r.dict[a]:
 					InputMap.action_add_event(a, e)
 
-### Steam ###
+### Achievements ###
 
 func try_achievement():
 	var map := ""
@@ -815,14 +850,6 @@ func try_achievement():
 	if csfn == end_path and save_time < 3600:
 		achieve("speedrun")
 
-func achieve(arg := ""):
-	if arg != "" and Steam.is_init():
-		Steam.set_achievement(arg)
-
-### Demo ###
-
-func store_page():
-	if Steam.is_init:
-		Steam.friends.activate_game_overlay_to_store(1993830, Steam.OverlayToStoreFlag.None)
-	else:
-		OS.shell_open("https://store.steampowered.com/app/1993830/ROTA/")
+func achieve(_arg := ""):
+	# Steam achievements were removed with the store integration.
+	pass
